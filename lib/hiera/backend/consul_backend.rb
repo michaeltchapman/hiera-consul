@@ -113,17 +113,21 @@ class Hiera
       def build_cache!
           services = wrapquery('/v1/catalog/services')
           return nil unless services.is_a? Hash
+          service_hash = {}
           services.each do |key, value|
+            service_hash[key] = {'tags' => services[key]}
             service = wrapquery("/v1/catalog/service/#{key}")
             next unless service.is_a? Array
             service.each do |node_hash|
               node = node_hash['Node']
+              service_hash[key][node] = {}
               node_hash.each do |property, value|
                 # Value of a particular node
                 next if property == 'ServiceID'
                 unless property == 'Node'
                   @cache["#{key}_#{property}_#{node}"] = value
                 end
+                service_hash[key][node][property] = value
                 unless @cache.has_key?("#{key}_#{property}")
                   # Value of the first registered node
                   @cache["#{key}_#{property}"] = value
@@ -135,6 +139,7 @@ class Hiera
               end
             end
           end
+          @cache["service_hash"] = service_hash
           Hiera.debug("[hiera-consul]: Cache #{@cache}")
       end
 
