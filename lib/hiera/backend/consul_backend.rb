@@ -49,6 +49,11 @@ class Hiera
               answer = @cache[key]
               return answer
             end
+            # tag query
+            if match = key.match(/^service_hash__(.+)/)
+              answer = consul_query(key)
+              return answer
+            end
           end
           Hiera.debug("[hiera-consul]: Lookup #{path}/#{key} on #{@config[:host]}:#{@config[:port]}")
           # Check that we are not looking somewhere that will make hiera crash subsequent lookups
@@ -141,6 +146,90 @@ class Hiera
           end
           @cache["service_hash"] = service_hash
           Hiera.debug("[hiera-consul]: Cache #{@cache}")
+      end
+
+      def consul_query(key)
+        answer = nil
+        params = key.split('__')
+        params.delete_at(0)
+
+        # one arg = tag
+        # 'Give me all the services with this tag'
+        Hiera.debug("[hiera-consul]: Parameters = #{params}")
+        if params.count == 1
+          tag = params[0]
+          answer = {}
+          @cache['service_hash'].each do |name, data|
+            if data['tags'].include? tag
+              answer[name] = data
+            end
+          end
+        end
+
+        # two args = tag + service
+        # 'Give me all the nodes in this service with this tag'
+        if params.count == 2
+          tag,service = params
+          answer = {}
+          @cache['service_hash'].each do |name, data|
+            if name == service
+              data.each do |node, sdata|
+                if node != 'tags'
+                  if sdata['ServiceTags'].include? tag
+                    answer[node] = sdata
+                  end
+                end
+              end
+            end
+          end
+        end
+
+        # three args = tag + service + attribute
+        # 'Give me an attribute of an random node from this service with this tag'
+        if params.count == 3
+          tag,service,attribute = params
+          @cache['service_hash'].each do |name, data|
+            if name == service
+              data.each do |node, sdata|
+                if node != 'tags'
+                  if sdata['ServiceTags'].include? tag
+                    answer = sdata[attribute]
+                  end
+                end
+              end
+            end
+          end
+        end
+
+        # four args = tag + service + attribute + modifier
+        # 'Give me the attribute values of all nodes from this service with this tag as an (array|hash)'
+        if params.count == 4
+          tag,service,attribute,modifier = params
+          if modifier == 'array'
+            answer = []
+          end
+          if modifier == 'hash'
+            answer = {}
+          end
+          @cache['service_hash'].each do |name, data|
+            if name == service
+              data.each do |node, sdata|
+                if node != 'tags'
+                  if sdata['ServiceTags'].include? tag
+                    if modifier == 'array'
+                      answer.push(sdata[attribute])
+                    end
+                    if modifier == 'hash'
+                      answer[node] = sdata[attribute]
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+
+        return answer
       end
 
     end
