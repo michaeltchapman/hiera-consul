@@ -153,6 +153,10 @@ class Hiera
         params = key.split('__')
         params.delete_at(0)
 
+        if !@cache.include? 'service_hash'
+          return nil
+        end
+
         # one arg = tag
         # 'Give me all the services with this tag'
         Hiera.debug("[hiera-consul]: Parameters = #{params}")
@@ -193,7 +197,9 @@ class Hiera
               data.each do |node, sdata|
                 if node != 'tags'
                   if sdata['ServiceTags'].include? tag
-                    answer = sdata[attribute]
+                    if sdata.has_key? attribute
+                      answer = sdata[attribute]
+                    end
                   end
                 end
               end
